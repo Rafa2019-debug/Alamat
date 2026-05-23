@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pencarian Wilayah Indonesia</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f7f6; 
+            padding: 20px; 
+            color: #333;
+        }
+        .container { 
+            max-width: 500px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+        }
+        h2 { 
+            text-align: center; 
+            margin-bottom: 25px; 
+            color: #2c3e50;
+        }
+        
+        /* Tab Navigation */
+        .tabs { display: flex; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+        .tab-btn { flex: 1; padding: 10px; text-align: center; cursor: pointer; background: none; border: none; font-weight: bold; color: #7f8c8d; transition: 0.3s; }
+        .tab-btn.active { color: #3498db; border-bottom: 3px solid #3498db; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Form Styles */
+        .form-group { margin-bottom: 20px; position: relative; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
+        input[type="text"], select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 15px; background-color: #fff; box-sizing: border-box; }
+        input[type="text"]:focus, select:focus { border-color: #3498db; outline: none; }
+        
+        /* Autocomplete Suggestions */
+        .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; border-radius: 0 0 6px 6px; max-height: 250px; overflow-y: auto; z-index: 10; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .suggestion-item { padding: 12px 12px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 14px; line-height: 1.4; }
+        .suggestion-item:hover { background-color: #f1f8ff; }
+
+        /* Result & Error Boxes */
+        .result { margin-top: 25px; padding: 15px; background: #e1f5fe; border-left: 5px solid #03a9f4; border-radius: 6px; display: none; line-height: 1.6; }
+        .result-label { color: #555; font-size: 13px; }
+        .result-value { font-size: 16px; font-weight: bold; color: #2c3e50; }
+        .error-msg { background: #ffebee; color: #c62828; padding: 12px; border-radius: 6px; font-size: 13px; margin-bottom: 20px; display: none; line-height: 1.5; border-left: 5px solid #c62828; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Pencarian Wilayah 🇮🇩</h2>
+        
+        <div id="globalError" class="error-msg"></div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('manual')">Pencarian Teks</button>
+            <button class="tab-btn" onclick="switchTab('dropdown')">Pilih Bertingkat</button>
+        </div>
+
+        <div id="tab-manual" class="tab-content active">
+            <div class="form-group">
+                <label for="searchInput">Ketik Nama Desa / Kecamatan / Kota</label>
+                <input type="text" id="searchInput" placeholder="Contoh: ciampea udik..." autocomplete="off">
+                <div class="suggestions" id="suggestionsBox"></div>
+            </div>
+        </div>
+
+        <div id="tab-dropdown" class="tab-content">
+            <div class="form-group">
+                <label>Provinsi</label>
+                <select id="provinsi"><option value="">Memuat Provinsi...</option></select>
+            </div>
+            <div class="form-group">
+                <label>Kabupaten / Kota</label>
+                <select id="kabupaten" disabled><option value="">Pilih Provinsi Dahulu</option></select>
+            </div>
+            <div class="form-group">
+                <label>Kecamatan</label>
+                <select id="kecamatan" disabled><option value="">Pilih Kabupaten Dahulu</option></select>
+            </div>
+            <div class="form-group">
+                <label>Kelurahan / Desa</label>
+                <select id="kelurahan" disabled><option value="">Pilih Kecamatan Dahulu</option></select>
+            </div>
+        </div>
+
+        <div class="result" id="resultBox">
+            <div class="result-label">Hasil Pilihan:</div>
+            <div class="result-value" id="resultText"></div>
+        </div>
+    </div>
+
+    <script>
+        // API Resmi Emsifa (Server yang paling stabil dan toleran terhadap CORS)
+        const API_URL = 'https://emsifa.github.io/api-wilayah-indonesia/api';
+
+        // Deteksi Otomatis Jika Aplikasi Dibuka dari File Manager Lokal (yang sering diblokir Browser)
+        window.onload = function() {
+            if (window.location.protocol === 'file:') {
+                const errBox = document.getElementById('globalError');
+                errBox.innerHTML = "<strong>⚠️ PERHATIAN:</strong> Anda membuka file HTML ini secara lokal (<code>file:///</code>). Beberapa browser (terutama di HP) memblokir pengambilan data wilayah. Jika daftar daerah tidak muncul, Anda wajib menjalankannya lewat Server Lokal / Hosting.";
+                errBox.style.display = 'block';
+            }
+        };
+
+        function showError(msg) {
+            const errBox = document.getElementById('globalError');
+            errBox.innerHTML = `<strong>Terjadi Kesalahan:</strong> ${msg}`;
+            errBox.style.display = 'block';
+        }
+
+        // Membersihkan nama agar menjadi: Kab, Kec, Kel
+        function formatLocation(kab, kec, kel) {
+            let cleanKab = (kab || '-').replace(/kabupaten\s+/i, '').replace(/kota\s+/i, '').trim();
+            let cleanKec = (kec || '-').replace(/kecamatan\s+/i, '').trim();
+            let cleanKel = (kel || '-').replace(/kelurahan\s+/i, '').replace(/desa\s+/i, '').trim();
+            function toTitleCase(str) { return str.toLowerCase().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
+            return `${toTitleCase(cleanKab)}, ${toTitleCase(cleanKec)}, ${toTitleCase(cleanKel)}`;
+        }
+
+        function showResultFormatted(formattedText) {
+            document.getElementById('resultText').innerHTML = formattedText;
+            document.getElementById('resultBox').style.display = 'block';
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            
+            if (window.event && window.event.target) { window.event.target.classList.add('active'); } 
+            else { document.querySelector(`button[onclick="switchTab('${tab}')"]`).classList.add('active'); }
+            
+            document.getElementById('resultBox').style.display = 'none';
+            document.getElementById('searchInput').value = '';
+        }
+
+        // ==========================================
+        // 1. PENCARIAN TEKS (API OPENSTREETMAP)
+        // ==========================================
+        const searchInput = document.getElementById('searchInput');
+        const suggestionsBox = document.getElementById('suggestionsBox');
+        let searchTimeout;
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const keyword = this.value.trim();
+            
+            if (keyword.length < 3) { suggestionsBox.style.display = 'none'; return; }
+
+            suggestionsBox.innerHTML = '<div class="suggestion-item" style="color: #3498db; text-align:center;">Mencari wilayah... 🔍</div>';
+            suggestionsBox.style.display = 'block';
+
+            searchTimeout = setTimeout(() => {
+                const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(keyword)}&format=json&countrycodes=id&addressdetails=1&limit=6`;
+                
+                fetch(url, { headers: { 'Accept-Language': 'id-ID' } }) // Memaksa format bahasa Indonesia
+                    .then(res => {
+                        if (!res.ok) throw new Error("Gagal mengambil data dari satelit");
+                        return res.json();
+                    })
+                    .then(data => {
+                        suggestionsBox.innerHTML = '';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                const div = document.createElement('div');
+                                div.className = 'suggestion-item';
+                                const addr = item.address || {};
+                                
+                                const kel = addr.village || addr.suburb || addr.neighbourhood || addr.hamlet || addr.residential || item.name || "-";
+                                const kec = addr.city_district || addr.municipality || addr.town || "-";
+                                const kab = addr.county || addr.city || addr.state_district || addr.region || "-";
+                                
+                                const formattedText = formatLocation(kab, kec, kel);
+                                
+                                div.innerHTML = `<strong>${formattedText}</strong> <br><span style="font-size: 11px; color: #7f8c8d;">${item.display_name}</span>`;
+                                div.onclick = function() {
+                                    searchInput.value = formattedText; 
+                                    suggestionsBox.style.display = 'none';
+                                    showResultFormatted(formattedText);
+                                };
+                                suggestionsBox.appendChild(div);
+                            });
+                        } else {
+                            suggestionsBox.innerHTML = '<div class="suggestion-item" style="color: #e74c3c; text-align:center;">Wilayah tidak ditemukan</div>';
+                        }
+                    })
+                    .catch(error => {
+                        suggestionsBox.innerHTML = '<div class="suggestion-item" style="color: #e74c3c; text-align:center;">Pencarian Diblokir / Offline. Pastikan koneksi internet aktif.</div>';
+                    });
+            }, 800);
+        });
+
+        document.addEventListener('click', function(e) {
+            if (e.target !== searchInput) suggestionsBox.style.display = 'none';
+        });
+
+        // ==========================================
+        // 2. DROPDOWN BERTINGKAT (API EMSIFA GITHUB PAGES)
+        // ==========================================
+        const els = {
+            prov: document.getElementById('provinsi'),
+            kab: document.getElementById('kabupaten'),
+            kec: document.getElementById('kecamatan'),
+            kel: document.getElementById('kelurahan')
+        };
+
+        // Mengambil Data Provinsi
+        fetch(`${API_URL}/provinces.json`)
+            .then(res => {
+                if (!res.ok) throw new Error("Akses data Provinsi diblokir");
+                return res.json();
+            })
+            .then(data => {
+                els.prov.innerHTML = '<option value="">Pilih Provinsi...</option>';
+                data.forEach(p => els.prov.add(new Option(p.name, p.id)));
+            }).catch(err => {
+                els.prov.innerHTML = '<option value="">Gagal Memuat (Akses Diblokir)</option>';
+                showError("Gagal mengambil data Provinsi. Akses API diblokir oleh peramban (browser) Anda.");
+            });
+
+        els.prov.addEventListener('change', e => loadDropdown(e, 'kabupaten', 'regencies', els.kab));
+        els.kab.addEventListener('change', e => loadDropdown(e, 'kecamatan', 'districts', els.kec));
+        els.kec.addEventListener('change', e => loadDropdown(e, 'kelurahan', 'villages', els.kel));
+        
+        els.kel.addEventListener('change', () => {
+            if (els.kel.value) {
+                const kabName = els.kab.options[els.kab.selectedIndex].text;
+                const kecName = els.kec.options[els.kec.selectedIndex].text;
+                const kelName = els.kel.options[els.kel.selectedIndex].text;
+                showResultFormatted(formatLocation(kabName, kecName, kelName));
+            }
+        });
+
+        function loadDropdown(e, childName, endpoint, childEl) {
+            document.getElementById('resultBox').style.display = 'none';
+            childEl.innerHTML = `<option value="">Pilih ${childName}...</option>`;
+            childEl.disabled = true;
+            
+            if(childName === 'kabupaten') { els.kec.innerHTML = '<option value="">Pilih Kecamatan...</option>'; els.kec.disabled = true; els.kel.innerHTML = '<option value="">Pilih Kelurahan...</option>'; els.kel.disabled = true; }
+            if(childName === 'kecamatan') { els.kel.innerHTML = '<option value="">Pilih Kelurahan...</option>'; els.kel.disabled = true; }
+
+            if (e.target.value) {
+                childEl.innerHTML = `<option value="">Mengambil data...</option>`;
+                fetch(`${API_URL}/${endpoint}/${e.target.value}.json`)
+                    .then(res => {
+                        if (!res.ok) throw new Error(`Akses ${childName} diblokir`);
+                        return res.json();
+                    })
+                    .then(data => {
+                        childEl.innerHTML = `<option value="">Pilih ${childName}...</option>`;
+                        data.forEach(item => childEl.add(new Option(item.name, item.id)));
+                        childEl.disabled = false;
+                    })
+                    .catch(() => {
+                        childEl.innerHTML = `<option value="">Gagal Terhubung</option>`;
+                        showError(`Gagal mengambil data ${childName}.`);
+                    });
+            }
+        }
+    </script>
+</body>
+</html>
