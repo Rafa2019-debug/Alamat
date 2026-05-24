@@ -103,7 +103,7 @@ hasil.innerHTML = "";
 if(key.length < 2) return;
 
 const keywords = key
-.split(',')
+.split(/[,\s]+/)
 .map(v => norm(v))
 .filter(v => v);
 
