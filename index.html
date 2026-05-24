@@ -87,6 +87,8 @@ document.getElementById("status").innerHTML =
 console.log(err);
 });
 
+let debounceTimer;
+
 function norm(s){
 return (s || "").toLowerCase().trim();
 }
@@ -94,7 +96,13 @@ return (s || "").toLowerCase().trim();
 document.getElementById("search")
 .addEventListener("input", function(){
 
-const key = norm(this.value);
+clearTimeout(debounceTimer);
+
+const inputEl = this;
+
+debounceTimer = setTimeout(()=>{
+
+const key = norm(inputEl.value);
 
 const hasil = document.getElementById("hasil");
 
@@ -131,11 +139,13 @@ hasil.innerHTML = `
 return;
 }
 
-found.forEach(x=>{
+let htmlResult = "";
+
+found.slice(0,30).forEach(x=>{
 
 const hasilAlamat = `${x.kabupaten.replace(/KABUPATEN /i,'').replace(/KOTA /i,'')}, ${x.kecamatan}, ${x.name}`;
 
-hasil.innerHTML += `
+htmlResult += `
 <div class="result">
 
 <div class="label">Hasil Alamat</div>
@@ -158,6 +168,10 @@ Klik alamat untuk salin
 `;
 
 });
+
+hasil.innerHTML = htmlResult;
+
+},250);
 
 });
 
