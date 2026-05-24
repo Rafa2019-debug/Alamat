@@ -102,9 +102,23 @@ hasil.innerHTML = "";
 
 if(key.length < 2) return;
 
-const found = DATA.filter(x =>
-norm(x.name).includes(key)
-).slice(0,100);
+const keywords = key
+.split(',')
+.map(v => norm(v))
+.filter(v => v);
+
+const found = DATA.filter(x => {
+
+const gabung = (
+x.name + ' ' +
+x.kecamatan + ' ' +
+x.kabupaten + ' ' +
+x.provinsi
+).toLowerCase();
+
+return keywords.every(k => gabung.includes(k));
+
+}).slice(0,100);
 
 if(found.length === 0){
 
