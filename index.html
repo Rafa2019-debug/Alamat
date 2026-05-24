@@ -1,110 +1,162 @@
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pencarian Wilayah Indonesia Full Offline</title>
+<title>Pencarian Wilayah Indonesia</title>
+
 <style>
 body{
 font-family:Arial,sans-serif;
 background:#f2f5f7;
-margin:0;
 padding:20px;
+margin:0;
 }
+
 .container{
 max-width:700px;
 margin:auto;
-background:#fff;
+background:white;
 padding:20px;
 border-radius:12px;
-box-shadow:0 4px 15px rgba(0,0,0,.1);
+box-shadow:0 4px 12px rgba(0,0,0,.1);
 }
+
 h1{
 text-align:center;
 color:#1565c0;
 }
+
 input{
 width:100%;
 padding:14px;
 font-size:16px;
+border-radius:10px;
 border:1px solid #ccc;
-border-radius:8px;
 box-sizing:border-box;
 }
-.result{
-margin-top:20px;
-}
+
 .card{
-background:#e3f2fd;
+margin-top:15px;
 padding:15px;
-border-radius:10px;
-margin-bottom:10px;
+background:#e3f2fd;
 border-left:5px solid #1976d2;
+border-radius:10px;
 }
+
 .label{
 font-size:13px;
-color:#666;
+color:#555;
+margin-top:8px;
 }
+
 .value{
-font-weight:bold;
 font-size:18px;
-margin-top:5px;
+font-weight:bold;
 }
+
 .status{
 margin-top:10px;
 font-size:14px;
-color:#2e7d32;
+color:green;
+}
+
+.error{
+background:#ffebee;
+border-left-color:#d32f2f;
 }
 </style>
 </head>
+
 <body>
+
 <div class="container">
+
 <h1>Pencarian Wilayah Indonesia 🇮🇩</h1>
 
-<input type="text" id="search" placeholder="Cari desa / kelurahan / kecamatan / kabupaten">
+<input type="text" id="searchInput" placeholder="Cari desa, kecamatan, kabupaten...">
 
-<div class="status" id="status">Memuat database wilayah...</div>
+<div class="status" id="status">Memuat database...</div>
 
-<div class="result" id="result"></div>
+<div id="results"></div>
+
 </div>
 
 <script>
-let wilayahData = [];
 
-fetch('indonesia-region.min.json')
-.then(res => res.json())
-.then(data => {
-wilayahData = data;
+let DATA = [];
+
+async function loadData(){
+
+try{
+
+const res = await fetch('./indonesia-region.min.json');
+
+DATA = await res.json();
+
 document.getElementById('status').innerHTML =
-'✅ Database wilayah Indonesia berhasil dimuat';
-})
-.catch(err => {
+'✅ Database berhasil dimuat';
+
+}catch(err){
+
 document.getElementById('status').innerHTML =
 '❌ Gagal memuat database';
-});
 
-function normalize(str){
-return str.toLowerCase().trim();
+console.log(err);
+
 }
 
-document.getElementById('search').addEventListener('input', function(){
-const keyword = normalize(this.value);
+}
 
-const resultBox = document.getElementById('result');
-resultBox.innerHTML = '';
+loadData();
+
+function norm(txt){
+return String(txt || '')
+.toLowerCase()
+.trim();
+}
+
+document.getElementById('searchInput')
+.addEventListener('input', function(){
+
+const keyword = norm(this.value);
+
+const results = document.getElementById('results');
+
+results.innerHTML = '';
 
 if(keyword.length < 2) return;
 
-let found = 0;
+let total = 0;
 
-wilayahData.forEach(prov => {
-(prov.regencies || []).forEach(kab => {
-(kab.districts || []).forEach(kec => {
+for(const prov of DATA){
 
-if(normalize(kec.name).includes(keyword)){
-found++;
+for(const kab of (prov.regencies || [])){
 
-resultBox.innerHTML += `
+if(norm(kab.name).includes(keyword)){
+
+total++;
+
+results.innerHTML += `
+<div class="card">
+<div class="label">Kabupaten/Kota</div>
+<div class="value">${kab.name}</div>
+
+<div class="label">Provinsi</div>
+<div class="value">${prov.name}</div>
+</div>
+`;
+
+}
+
+for(const kec of (kab.districts || [])){
+
+if(norm(kec.name).includes(keyword)){
+
+total++;
+
+results.innerHTML += `
 <div class="card">
 <div class="label">Kecamatan</div>
 <div class="value">${kec.name}</div>
@@ -114,17 +166,21 @@ resultBox.innerHTML += `
 
 <div class="label">Provinsi</div>
 <div class="value">${prov.name}</div>
-</div>`;
+</div>
+`;
+
 }
 
-(kec.villages || []).forEach(kel => {
-if(normalize(kel.name).includes(keyword)){
-found++;
+for(const desa of (kec.villages || [])){
 
-resultBox.innerHTML += `
+if(norm(desa.name).includes(keyword)){
+
+total++;
+
+results.innerHTML += `
 <div class="card">
-<div class="label">Kelurahan / Desa</div>
-<div class="value">${kel.name}</div>
+<div class="label">Kelurahan/Desa</div>
+<div class="value">${desa.name}</div>
 
 <div class="label">Kecamatan</div>
 <div class="value">${kec.name}</div>
@@ -134,20 +190,32 @@ resultBox.innerHTML += `
 
 <div class="label">Provinsi</div>
 <div class="value">${prov.name}</div>
-</div>`;
-}
-});
-});
-});
-});
+</div>
+`;
 
-if(found === 0){
-resultBox.innerHTML = `
-<div class="card" style="background:#ffebee;border-left-color:#d32f2f;">
+}
+
+}
+
+}
+
+}
+
+}
+
+if(total === 0){
+
+results.innerHTML = `
+<div class="card error">
 <div class="value">Data tidak ditemukan</div>
-</div>`;
+</div>
+`;
+
 }
+
 });
+
 </script>
+
 </body>
 </html>
