@@ -133,23 +133,26 @@ return;
 
 found.forEach(x=>{
 
+const hasilAlamat = `${x.kabupaten.replace(/KABUPATEN /i,'').replace(/KOTA /i,'')}, ${x.kecamatan}, ${x.name}`;
+
 hasil.innerHTML += `
 <div class="result">
 
-<div class="label">Jenis</div>
-<div class="value">${x.type}</div>
+<div class="label">Hasil Alamat</div>
 
-<div class="label">Nama</div>
-<div class="value">${x.name}</div>
+<div class="value"
+style="user-select:all;-webkit-user-select:all;"
+onclick="navigator.clipboard.writeText('${"${hasilAlamat}"}')">
+${"${hasilAlamat}"}
+</div>
 
-<div class="label">Kecamatan</div>
-<div class="value">${x.kecamatan}</div>
-
-<div class="label">Kabupaten/Kota</div>
-<div class="value">${x.kabupaten}</div>
-
-<div class="label">Provinsi</div>
-<div class="value">${x.provinsi}</div>
+<div style="
+margin-top:10px;
+font-size:12px;
+color:green;
+">
+Klik alamat untuk salin
+</div>
 
 </div>
 `;
